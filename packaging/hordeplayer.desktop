@@ -1,0 +1,16 @@
+[Desktop Entry]
+Type=Application
+Version=1.0
+Name=HordePlayer
+GenericName=Video Player
+GenericName[fa]=پخش‌کننده ویدیو
+Comment=Professional local video player powered by ffmpeg
+Comment[fa]=پخش‌کنندهٔ حرفه‌ای ویدیو با موتور ffmpeg
+Exec=hordeplayer
+TryExec=hordeplayer
+Icon=hordeplayer
+Terminal=false
+Categories=AudioVideo;Player;Video;
+Keywords=video;player;mkv;ffmpeg;movie;media;stream;
+StartupNotify=true
+StartupWMClass=HordePlayer

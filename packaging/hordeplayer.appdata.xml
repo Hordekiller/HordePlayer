@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.hordekiller.HordePlayer</id>
+  <name>HordePlayer</name>
+  <summary>Professional local video player powered by ffmpeg</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>GPL-3.0-or-later</project_license>
+
+  <description>
+    <p>
+      HordePlayer plays any video link or local file in a clean, modern web UI.
+      A small local ffmpeg server remuxes and transcodes MKV and AC3/E-AC3 audio
+      that browsers cannot decode, with optional audio amplification and
+      normalisation.
+    </p>
+    <ul>
+      <li>Supports mp4, mkv, webm, mov, ts, HLS and DASH sources</li>
+      <li>On-the-fly MKV/AC3 to MP4/AAC transcoding</li>
+      <li>Audio boost and EBU R128 loudness normalisation</li>
+      <li>Background caching for fast seeking</li>
+      <li>Playlist, speed, loop, subtitles, PiP and fullscreen</li>
+    </ul>
+  </description>
+
+  <launchable type="desktop-id">hordeplayer.desktop</launchable>
+  <url type="homepage">https://github.com/Hordekiller/HordePlayer</url>
+  <url type="bugtracker">https://github.com/Hordekiller/HordePlayer/issues</url>
+  <provides>
+    <binary>hordeplayer</binary>
+  </provides>
+  <categories>
+    <category>AudioVideo</category>
+    <category>Player</category>
+  </categories>
+  <releases>
+    <release version="1.0.0" date="2026-10-09"/>
+  </releases>
+</component>

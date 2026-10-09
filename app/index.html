@@ -1,0 +1,876 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="theme-color" content="#0a0d16">
+<meta name="description" content="HordePlayer — پخش‌کنندهٔ حرفه‌ای ویدیو با موتور ffmpeg">
+<title>HordePlayer — پخش‌کنندهٔ حرفه‌ای ویدیو</title>
+<link rel="icon" href="icon.png" type="image/png">
+<link rel="icon" href="favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.5.17/dist/hls.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/shaka-player@4.11.2/dist/shaka-player.compiled.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg0:#05060b; --bg1:#0a0d16;
+    --panel:#101521; --panel2:#151c2c; --panel3:#1b2338;
+    --line:#232c44; --line2:#33406a;
+    --txt:#eef2ff; --muted:#8b96b8; --faint:#5a6383;
+    --accent:#5b8cff; --accent2:#a855f7; --cyan:#22d3ee;
+    --good:#22d3a0; --warn:#f5b544; --bad:#ff5c72;
+    --brand:linear-gradient(135deg,var(--accent),var(--accent2));
+    --radius:20px; --r-sm:12px; --r-xs:10px;
+    --shadow:0 30px 90px -24px rgba(0,0,0,.85);
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html,body{height:100%}
+  body{
+    font-family:'Vazirmatn',system-ui,"Segoe UI",Tahoma,sans-serif;
+    color:var(--txt);min-height:100vh;padding:22px 14px 40px;
+    background:
+      radial-gradient(1200px 700px at 82% -12%,rgba(91,140,255,.20),transparent 58%),
+      radial-gradient(1000px 620px at 8% 2%,rgba(168,85,247,.18),transparent 55%),
+      radial-gradient(1200px 800px at 50% 120%,rgba(34,211,238,.08),transparent 60%),
+      linear-gradient(180deg,var(--bg1),var(--bg0) 55%);
+    background-attachment:fixed;
+    display:flex;flex-direction:column;align-items:center;
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+  }
+  ::selection{background:rgba(91,140,255,.35)}
+  .ic{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;display:block}
+
+  /* ================= app shell ================= */
+  .app{
+    width:100%;max-width:1240px;display:flex;flex-direction:column;
+    background:linear-gradient(180deg,rgba(20,26,42,.9),rgba(10,13,22,.96));
+    border:1px solid var(--line);border-radius:var(--radius);
+    box-shadow:var(--shadow), inset 0 1px 0 rgba(255,255,255,.04);
+    overflow:hidden;backdrop-filter:blur(14px);
+  }
+
+  /* ---- titlebar ---- */
+  .titlebar{
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+    padding:13px 18px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(255,255,255,.045),rgba(255,255,255,0));
+  }
+  .brand{display:flex;align-items:center;gap:12px}
+  .brand .logo{
+    width:44px;height:44px;border-radius:13px;display:block;
+    box-shadow:0 10px 24px -8px rgba(124,92,255,.75);
+  }
+  .brand .wm{display:flex;flex-direction:column;line-height:1.15}
+  .brand .wm .name{font-size:18px;font-weight:800;letter-spacing:.3px}
+  .brand .wm .name .accent{background:var(--brand);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .brand .wm .sub{font-size:11.5px;color:var(--muted);font-weight:400}
+  .spacer{flex:1}
+  .status{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+  .pill{
+    font-size:11.5px;font-weight:500;color:var(--muted);background:var(--panel2);
+    border:1px solid var(--line);padding:6px 12px;border-radius:999px;
+    display:inline-flex;align-items:center;gap:7px;white-space:nowrap;transition:.2s;
+  }
+  .pill .ic{width:13px;height:13px}
+  .pill .dot{width:7px;height:7px;border-radius:50%;background:var(--faint)}
+  .pill.on{color:var(--good);border-color:rgba(34,211,160,.4);background:rgba(34,211,160,.09)}
+  .pill.on .dot{background:var(--good);box-shadow:0 0 8px var(--good)}
+  .pill.warn{color:var(--warn);border-color:rgba(245,181,68,.4);background:rgba(245,181,68,.09)}
+  .pill.warn .dot{background:var(--warn)}
+  .pill.bad{color:var(--bad);border-color:rgba(255,92,114,.4);background:rgba(255,92,114,.09)}
+  .pill.bad .dot{background:var(--bad)}
+
+  /* ---- body grid ---- */
+  .body{display:grid;grid-template-columns:minmax(0,1fr) 372px;gap:18px;padding:18px}
+  @media(max-width:1020px){ .body{grid-template-columns:1fr} }
+
+  /* ================= source bar ================= */
+  .source{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .inputwrap{flex:1;min-width:240px;position:relative;display:flex;align-items:center}
+  .inputwrap>.ic{position:absolute;inset-inline-start:14px;color:var(--faint);pointer-events:none;width:17px;height:17px}
+  .inputwrap input{
+    width:100%;background:var(--panel);border:1px solid var(--line);color:var(--txt);
+    padding:14px 16px;border-radius:var(--r-sm);font-size:13.5px;outline:none;
+    padding-inline-start:44px;direction:ltr;text-align:left;transition:.18s;
+  }
+  .inputwrap input::placeholder{color:var(--faint)}
+  .inputwrap input:focus{border-color:var(--accent);box-shadow:0 0 0 4px rgba(91,140,255,.16)}
+
+  /* ================= buttons ================= */
+  button,.btn{
+    font-family:inherit;font-size:13.5px;font-weight:500;color:var(--txt);
+    background:var(--panel2);border:1px solid var(--line);border-radius:var(--r-sm);
+    padding:11px 15px;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:8px;
+    transition:.16s ease;white-space:nowrap;line-height:1;user-select:none;
+  }
+  button:hover,.btn:hover{border-color:var(--line2);background:var(--panel3);transform:translateY(-1px)}
+  button:active{transform:translateY(0) scale(.99)}
+  .primary{background:var(--brand);border-color:transparent;font-weight:600;box-shadow:0 12px 28px -12px rgba(124,92,255,.9)}
+  .primary:hover{filter:brightness(1.08);background:var(--brand);border-color:transparent}
+  .ghost{background:transparent}
+  .ibtn{padding:11px;border-radius:var(--r-sm);background:transparent;color:var(--muted)}
+  .ibtn:hover{background:var(--panel2);color:var(--txt)}
+  .ibtn.active{color:var(--accent);background:rgba(91,140,255,.14);border-color:transparent}
+  .ibtn.active .ic{filter:drop-shadow(0 0 6px rgba(91,140,255,.6))}
+
+  /* ================= player ================= */
+  .player{position:relative;margin-bottom:16px}
+  .player::before{
+    content:'';position:absolute;inset:-6% -2% -14%;z-index:0;border-radius:50%;
+    background:radial-gradient(60% 60% at 50% 50%,rgba(91,140,255,.28),transparent 70%);
+    filter:blur(46px);opacity:.7;pointer-events:none;transition:.4s;
+  }
+  .player.playing::before{opacity:1}
+  .stage{
+    position:relative;z-index:1;background:#000;border:1px solid var(--line);
+    border-radius:16px;overflow:hidden;aspect-ratio:16/9;width:100%;
+    box-shadow:0 22px 60px -22px rgba(0,0,0,.9);
+  }
+  .stage video{width:100%;height:100%;display:block;background:#000;outline:none}
+  .stage.dragover::after{
+    content:'';position:absolute;inset:0;z-index:6;border:2px dashed var(--accent);border-radius:16px;
+    background:rgba(91,140,255,.12);
+  }
+  /* overlay chrome */
+  .ov{position:absolute;inset:0;z-index:4;opacity:0;transition:opacity .28s;pointer-events:none}
+  .stage:hover .ov,.stage.paused .ov,.stage.show-ov .ov{opacity:1}
+  .ov-top{
+    position:absolute;top:0;inset-inline:0;padding:12px 14px;display:flex;
+    align-items:flex-start;justify-content:space-between;gap:10px;
+    background:linear-gradient(180deg,rgba(3,5,10,.7),transparent);
+  }
+  .np{font-size:12.5px;color:#dbe3ff;max-width:70%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+      text-shadow:0 1px 8px rgba(0,0,0,.9);padding-top:6px}
+  .ov-top .acts{display:flex;gap:4px;pointer-events:auto}
+  .ov-top .acts .ibtn{color:#e8ecff;background:rgba(10,14,24,.42)}
+  .ov-top .acts .ibtn:hover{background:rgba(30,40,66,.85)}
+  .bigplay{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) scale(.92);
+    width:82px;height:82px;border-radius:50%;border:none;cursor:pointer;
+    background:rgba(12,16,28,.55);backdrop-filter:blur(8px);
+    box-shadow:0 18px 48px -14px rgba(0,0,0,.9), inset 0 0 0 1px rgba(255,255,255,.14);
+    display:flex;align-items:center;justify-content:center;pointer-events:auto;transition:.2s;
+  }
+  .bigplay .ic{width:34px;height:34px;fill:currentColor;stroke:none;color:#fff;margin-inline-start:3px}
+  .bigplay:hover{transform:translate(-50%,-50%) scale(1);background:var(--brand);box-shadow:0 20px 50px -12px rgba(124,92,255,.9)}
+  .stage:not(.paused) .bigplay,.stage.emptyStage .bigplay{opacity:0;pointer-events:none}
+  .spinner{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);z-index:5;
+    width:50px;height:50px;border-radius:50%;border:3px solid rgba(255,255,255,.14);
+    border-top-color:var(--accent);animation:spin .8s linear infinite;display:none;
+  }
+  .spinner.on{display:block}
+  @keyframes spin{to{transform:translate(-50%,-50%) rotate(360deg)}}
+  .empty{
+    position:absolute;inset:0;z-index:3;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;gap:13px;text-align:center;padding:26px;
+    background:radial-gradient(80% 80% at 50% 40%,rgba(20,26,44,.6),rgba(6,8,14,.92));
+  }
+  .empty .mark{width:66px;height:66px;border-radius:18px;opacity:.95}
+  .empty b{font-size:15.5px;font-weight:600}
+  .empty span{font-size:12.5px;color:var(--muted);max-width:440px;line-height:1.9}
+  .empty .chips{display:flex;gap:7px;flex-wrap:wrap;justify-content:center;margin-top:2px}
+  .empty .chips em{font-style:normal;font-size:11px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);padding:5px 10px;border-radius:999px}
+
+  /* ================= transport ================= */
+  .transport{
+    display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+    background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:11px 13px;
+  }
+  .tgroup{display:flex;align-items:center;gap:3px}
+  .playbtn{width:46px;height:46px;border-radius:50%;padding:0;background:var(--brand);border-color:transparent;box-shadow:0 10px 26px -10px rgba(124,92,255,.9)}
+  .playbtn:hover{background:var(--brand);border-color:transparent;filter:brightness(1.08)}
+  .playbtn .ic{width:20px;height:20px;fill:currentColor;stroke:none}
+  .seekrow{flex:1;min-width:200px;display:flex;align-items:center;gap:11px}
+  .time{font-variant-numeric:tabular-nums;font-feature-settings:"tnum";font-size:12.5px;color:var(--muted);min-width:54px;text-align:center;direction:ltr}
+  .time.dur{color:var(--faint)}
+  .track{position:relative;flex:1;height:20px;display:flex;align-items:center;direction:ltr;cursor:pointer}
+  .track .bar{position:absolute;inset-inline:0;height:6px;border-radius:999px;background:#1e2740;overflow:visible}
+  .track .buf{position:absolute;top:0;height:100%;inset-inline-start:0;width:0;background:#2d3857;border-radius:999px}
+  .track .played{position:absolute;top:0;height:100%;inset-inline-start:0;width:0;background:var(--brand);border-radius:999px}
+  .track .played::after{
+    content:'';position:absolute;right:-7px;top:50%;transform:translateY(-50%) scale(0);
+    width:14px;height:14px;border-radius:50%;background:#fff;box-shadow:0 2px 8px rgba(0,0,0,.7);transition:transform .15s;
+  }
+  .track:hover .played::after,.track.scrub .played::after{transform:translateY(-50%) scale(1)}
+  .track input[type=range]{position:absolute;inset-inline:0;width:100%;height:20px;margin:0;opacity:0;cursor:pointer;z-index:2}
+  .track .tip{
+    position:absolute;bottom:24px;left:0;transform:translateX(-50%);
+    background:var(--panel3);border:1px solid var(--line2);color:var(--txt);
+    font-size:11px;padding:4px 8px;border-radius:8px;pointer-events:none;opacity:0;transition:.12s;
+    white-space:nowrap;direction:ltr;font-variant-numeric:tabular-nums;
+  }
+  .track:hover .tip{opacity:1}
+  .volgroup{display:flex;align-items:center;gap:7px}
+  input.rng{-webkit-appearance:none;appearance:none;width:84px;height:6px;border-radius:999px;outline:none;cursor:pointer;
+    background:linear-gradient(90deg,var(--accent) var(--p,100%),#1e2740 var(--p,100%))}
+  input.rng::-webkit-slider-thumb{-webkit-appearance:none;width:13px;height:13px;border-radius:50%;background:#fff;border:3px solid var(--accent);box-shadow:0 2px 8px rgba(0,0,0,.6);transition:.12s}
+  input.rng::-webkit-slider-thumb:hover{transform:scale(1.18)}
+  input.rng::-moz-range-thumb{width:13px;height:13px;border:3px solid var(--accent);background:#fff;border-radius:50%;cursor:pointer}
+
+  /* ================= side panel ================= */
+  .side{display:flex;flex-direction:column;gap:14px;min-width:0}
+  .seg{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:6px}
+  .seg button{flex-direction:column;gap:5px;background:transparent;border-color:transparent;color:var(--muted);padding:10px 4px;font-size:11px;border-radius:10px}
+  .seg button .ic{width:17px;height:17px}
+  .seg button:hover{background:var(--panel2);color:var(--txt);transform:none}
+  .seg button.active{color:var(--txt);background:linear-gradient(135deg,rgba(91,140,255,.24),rgba(168,85,247,.18));border-color:rgba(91,140,255,.35)}
+  .seg button.active .ic{color:var(--accent)}
+  .panels{position:relative}
+  .tabpanel{display:none;animation:fade .24s ease}
+  .tabpanel.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:14px}
+  .card h3{font-size:13.5px;font-weight:600;display:flex;align-items:center;gap:9px}
+  .card h3 .ic{color:var(--accent);width:17px;height:17px}
+  .field{display:flex;flex-direction:column;gap:7px}
+  .field>label{font-size:12px;color:var(--muted);font-weight:500}
+  .field input,.field select,textarea{
+    font-family:inherit;background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    padding:10px 12px;border-radius:var(--r-xs);font-size:13px;outline:none;transition:.16s;width:100%;
+  }
+  .field select{cursor:pointer}
+  .field input:focus,.field select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(91,140,255,.15)}
+  .ltr{direction:ltr;text-align:left}
+  .range-row{display:flex;align-items:center;gap:12px}
+  .range-row input[type=range]{flex:1}
+  .range-row .val{font-variant-numeric:tabular-nums;font-weight:600;color:var(--accent);min-width:46px;text-align:center;font-size:13px}
+  textarea{min-height:140px;resize:vertical;line-height:1.7;direction:ltr;text-align:left;font-family:ui-monospace,"SF Mono",Menlo,monospace;font-size:12.5px}
+  .row{display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+  .hint{font-size:11.5px;color:var(--muted);line-height:1.9}
+  .hint b{color:var(--txt)}
+  .hint code{direction:ltr;display:inline-block;background:var(--panel2);border:1px solid var(--line);padding:1px 7px;border-radius:7px;font-family:ui-monospace,monospace;font-size:11px}
+  .note{display:flex;gap:9px;align-items:flex-start;font-size:11.5px;line-height:1.85;color:#f0d9a8;
+    background:rgba(245,181,68,.08);border:1px solid rgba(245,181,68,.28);border-radius:12px;padding:11px 13px}
+  .note .ic{color:var(--warn);width:16px;height:16px;margin-top:2px}
+  .note.ok{color:#a9f0d8;background:rgba(34,211,160,.08);border-color:rgba(34,211,160,.28)}
+  .note.ok .ic{color:var(--good)}
+  kbd{background:var(--panel2);border:1px solid var(--line);border-bottom-width:2px;border-radius:6px;padding:2px 8px;font-size:11px;font-family:inherit;color:var(--txt)}
+  .kbd-grid{display:grid;grid-template-columns:1fr 1fr;gap:9px 14px}
+  .kbd-grid div{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--muted)}
+  .engname{font-weight:600;color:var(--txt)}
+
+  /* ================= footer ================= */
+  .foot{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+    padding:12px 18px;border-top:1px solid var(--line);font-size:11.5px;color:var(--faint);
+    background:linear-gradient(0deg,rgba(255,255,255,.02),transparent)}
+  .foot .brandmini{display:flex;align-items:center;gap:7px}
+  .foot .brandmini img{width:16px;height:16px;border-radius:5px}
+
+  /* ================= toast ================= */
+  .toaster{position:fixed;bottom:26px;left:50%;transform:translateX(-50%);z-index:99;display:flex;flex-direction:column;gap:9px;align-items:center;pointer-events:none;width:max-content;max-width:92vw}
+  .toast{
+    background:var(--panel3);border:1px solid var(--line2);color:var(--txt);padding:12px 20px;
+    border-radius:13px;font-size:13px;box-shadow:var(--shadow);opacity:0;transform:translateY(20px);
+    transition:.3s cubic-bezier(.2,.8,.2,1);max-width:92vw;text-align:center;
+  }
+  .toast.show{opacity:1;transform:none}
+  .toast.err{border-color:rgba(255,92,114,.5);color:#ffd2d8;background:#251019}
+  .toast.ok{border-color:rgba(34,211,160,.5);color:#baf7e4;background:#0d231d}
+
+  @media(max-width:640px){
+    body{padding:12px 8px 30px}
+    .titlebar{padding:11px 13px}
+    .brand .wm .sub{display:none}
+    .seg button span{display:none}
+    .time{min-width:46px;font-size:11.5px}
+  }
+</style>
+</head>
+<body>
+<!-- ===== HordePlayer icon sprite ===== -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-play" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M8 5.2v13.6c0 1 1.1 1.6 2 1.1l11-6.8c.8-.5.8-1.7 0-2.2L10 4.1c-.9-.5-2 .1-2 1.1z"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M7 4.5h3.4v15H7zM13.6 4.5H17v15h-3.4z"/></symbol>
+  <symbol id="i-back" viewBox="0 0 24 24"><path d="M12 4V1.5L7 5l5 3.5V6a6 6 0 1 1-6 6H3a9 9 0 1 0 9-8z"/></symbol>
+  <symbol id="i-fwd" viewBox="0 0 24 24"><path d="M12 4V1.5L17 5l-5 3.5V6a6 6 0 1 0 6 6h2a9 9 0 1 1-9-8z"/></symbol>
+  <symbol id="i-volume" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M18.6 5.6a9 9 0 0 1 0 12.8"/></symbol>
+  <symbol id="i-mute" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="m16 9 5 6"/><path d="m21 9-5 6"/></symbol>
+  <symbol id="i-boost" viewBox="0 0 24 24"><path d="M11 5 6 9H3v6h3l5 4z"/><path d="M15.5 8.5a5 5 0 0 1 0 7"/><path d="M19 9.5v5"/><path d="M16.5 12h5"/></symbol>
+  <symbol id="i-loop" viewBox="0 0 24 24"><path d="M17 2.5 21 6l-4 3.5"/><path d="M3 12V9.5A3.5 3.5 0 0 1 6.5 6H21"/><path d="M7 21.5 3 18l4-3.5"/><path d="M21 12v2.5a3.5 3.5 0 0 1-3.5 3.5H3"/></symbol>
+  <symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 3H5a2 2 0 0 0-2 2v3"/><path d="M16 3h3a2 2 0 0 1 2 2v3"/><path d="M16 21h3a2 2 0 0 0 2-2v-3"/><path d="M8 21H5a2 2 0 0 1-2-2v-3"/></symbol>
+  <symbol id="i-compress" viewBox="0 0 24 24"><path d="M8 3v3a2 2 0 0 1-2 2H3"/><path d="M16 3v3a2 2 0 0 0 2 2h3"/><path d="M16 21v-3a2 2 0 0 1 2-2h3"/><path d="M8 21v-3a2 2 0 0 0-2-2H3"/></symbol>
+  <symbol id="i-pip" viewBox="0 0 24 24"><rect x="2" y="4" width="20" height="16" rx="2.5"/><rect x="12" y="12" width="8" height="6" rx="1.4" fill="currentColor" stroke="none"/></symbol>
+  <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7.5A2 2 0 0 1 5 5.5h3.6l2 2H19a2 2 0 0 1 2 2v7.5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></symbol>
+  <symbol id="i-link" viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7"/><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7"/></symbol>
+  <symbol id="i-zap" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M13 2 4.5 13.2c-.5.7 0 1.8.9 1.8H11l-1 7 8.5-11.2c.5-.7 0-1.8-.9-1.8H13z"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24"><path d="M8 6h13"/><path d="M8 12h13"/><path d="M8 18h13"/><path d="M3 6h.01"/><path d="M3 12h.01"/><path d="M3 18h.01"/></symbol>
+  <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-6"/><path d="M4 11V3"/><path d="M12 21v-9"/><path d="M12 8V3"/><path d="M20 21v-4"/><path d="M20 13V3"/><path d="M1.5 15h5"/><path d="M9.5 8h5"/><path d="M17.5 17h5"/></symbol>
+  <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.2a2.6 2.6 0 1 1 3.6 2.4c-.7.4-1 1-1 1.8v.4"/><path d="M12 17h.01"/></symbol>
+  <symbol id="i-server" viewBox="0 0 24 24"><rect x="3" y="3.5" width="18" height="7" rx="2"/><rect x="3" y="13.5" width="18" height="7" rx="2"/><path d="M7 7h.01"/><path d="M7 17h.01"/></symbol>
+  <symbol id="i-cc" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2.5"/><path d="M9.5 10.5a2.5 2.5 0 1 0 0 3"/><path d="M16.5 10.5a2.5 2.5 0 1 0 0 3"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12"/><path d="m7 10 5 5 5-5"/><path d="M4.5 20.5h15"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12.5 4.5 4.5L19 7"/></symbol>
+  <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6 18 18"/><path d="M18 6 6 18"/></symbol>
+  <symbol id="i-next" viewBox="0 0 24 24"><path fill="currentColor" stroke="none" d="M6 5.2v13.6c0 1 1.1 1.6 2 1.1L18 12 8 4.1c-.9-.5-2 .1-2 1.1z"/><rect x="19" y="4" width="2.4" height="16" rx="1"/></symbol>
+  <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></symbol>
+  <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></symbol>
+  <symbol id="i-gear" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></symbol>
+</defs></svg>
+
+<div class="app">
+  <!-- ===== titlebar ===== -->
+  <header class="titlebar">
+    <div class="brand">
+      <img class="logo" src="icon.png" alt="HordePlayer">
+      <div class="wm">
+        <span class="name">Horde<span class="accent">Player</span></span>
+        <span class="sub">پخش‌کنندهٔ حرفه‌ای ویدیو · موتور ffmpeg</span>
+      </div>
+    </div>
+    <div class="spacer"></div>
+    <div class="status">
+      <span class="pill" id="srvBadge"><span class="dot"></span>بررسی سرور…</span>
+      <span class="pill" id="engine"><span class="dot"></span>آماده</span>
+      <span class="pill" id="cacheBadge" style="display:none"><span class="dot"></span></span>
+    </div>
+  </header>
+
+  <div class="body">
+    <!-- ================= main ================= -->
+    <main>
+      <div class="source">
+        <div class="inputwrap">
+          <svg class="ic"><use href="#i-link"/></svg>
+          <input id="url" type="text" placeholder="لینک ویدیو را بچسبان یا اینجا رها کن — mp4 · mkv · m3u8 · mpd" spellcheck="false">
+        </div>
+        <button class="primary" id="playBtn"><svg class="ic"><use href="#i-play"/></svg> پخش</button>
+        <button id="transcodeBtn" title="پخش با موتور ffmpeg (برای MKV و صدای AC3)"><svg class="ic"><use href="#i-zap"/></svg> تبدیل</button>
+        <label class="btn"><svg class="ic"><use href="#i-folder"/></svg> فایل<input id="file" type="file" accept="video/*,audio/*,.m3u8" hidden multiple></label>
+      </div>
+
+      <div class="player" id="player">
+        <div class="stage" id="stage">
+          <video id="video" playsinline controlslist="nodownload" preload="metadata"></video>
+          <div class="ov">
+            <div class="ov-top">
+              <div class="np" id="np"></div>
+              <div class="acts">
+                <button class="ibtn" id="pipBtn" title="تصویر در تصویر (PiP)"><svg class="ic"><use href="#i-pip"/></svg></button>
+                <button class="ibtn" id="fsBtn" title="تمام‌صفحه"><svg class="ic"><use href="#i-expand"/></svg></button>
+              </div>
+            </div>
+            <button class="bigplay" id="bigPlay" title="پخش"><svg class="ic"><use href="#i-play"/></svg></button>
+          </div>
+          <div class="spinner" id="spinner"></div>
+          <div class="empty" id="empty">
+            <img class="mark" src="icon.png" alt="">
+            <b>فایل یا لینک را وارد کن</b>
+            <span>فایل را اینجا رها کن، یا لینک را بچسبان و «پخش» بزن. برای فایل‌های MKV و صدای AC3 دکمهٔ «تبدیل» را بزن.</span>
+            <div class="chips"><em>MP4</em><em>MKV</em><em>HLS</em><em>DASH</em><em>تقویت صدا</em></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="transport">
+        <div class="tgroup">
+          <button class="ibtn" id="back" title="عقب (ثانیهٔ تعیین‌شده)"><svg class="ic"><use href="#i-back"/></svg></button>
+          <button class="playbtn" id="play" title="پخش / توقف"><svg class="ic"><use href="#i-play"/></svg></button>
+          <button class="ibtn" id="fwd" title="جلو (ثانیهٔ تعیین‌شده)"><svg class="ic"><use href="#i-fwd"/></svg></button>
+        </div>
+        <div class="seekrow">
+          <span class="time" id="cur">00:00</span>
+          <div class="track" id="track">
+            <div class="bar"><div class="buf" id="buf"></div><div class="played" id="played"></div></div>
+            <input type="range" id="seek" min="0" max="1000" value="0" step="1">
+            <div class="tip" id="seekTip">00:00</div>
+          </div>
+          <span class="time dur" id="dur">00:00</span>
+        </div>
+        <div class="volgroup">
+          <button class="ibtn" id="mute" title="بی‌صدا (M)"><svg class="ic"><use href="#i-volume"/></svg></button>
+          <input class="rng" id="vol" type="range" min="0" max="1" step="0.01" value="1">
+        </div>
+        <select id="speed" title="سرعت پخش" style="width:auto">
+          <option value="0.25">۰.۲۵×</option><option value="0.5">۰.۵×</option>
+          <option value="0.75">۰.۷۵×</option><option value="1" selected>۱×</option>
+          <option value="1.25">۱.۲۵×</option><option value="1.5">۱.۵×</option>
+          <option value="1.75">۱.۷۵×</option><option value="2">۲×</option><option value="3">۳×</option>
+        </select>
+        <button class="ibtn" id="loop" title="تکرار (L)"><svg class="ic"><use href="#i-loop"/></svg></button>
+        <button class="ibtn" id="ccBtn" title="زیرنویس"><svg class="ic"><use href="#i-cc"/></svg></button>
+      </div>
+    </main>
+
+    <!-- ================= side ================= -->
+    <aside class="side">
+      <div class="seg">
+        <button class="active" data-tab="playlist"><svg class="ic"><use href="#i-list"/></svg><span>پلی‌لیست</span></button>
+        <button data-tab="audio"><svg class="ic"><use href="#i-boost"/></svg><span>صدا</span></button>
+        <button data-tab="settings"><svg class="ic"><use href="#i-gear"/></svg><span>تنظیمات</span></button>
+        <button data-tab="help"><svg class="ic"><use href="#i-help"/></svg><span>راهنما</span></button>
+      </div>
+      <div class="panels">
+        <section class="tabpanel active" data-tab="playlist">
+          <div class="card">
+            <h3><svg class="ic"><use href="#i-list"/></svg>پلی‌لیست</h3>
+            <textarea id="playlist" placeholder="هر خط یک لینک ویدیو…"></textarea>
+            <div class="row">
+              <button class="primary" id="loadList"><svg class="ic"><use href="#i-play"/></svg> پخش</button>
+              <button id="next"><svg class="ic"><use href="#i-next"/></svg> بعدی</button>
+              <span class="pill" id="listInfo">۰ آیتم</span>
+            </div>
+            <div class="hint">ترتیب پخش از بالا به پایین است؛ با پایان هر آیتم، مورد بعدی خودکار پخش می‌شود.</div>
+          </div>
+        </section>
+
+        <section class="tabpanel" data-tab="audio">
+          <div class="card">
+            <h3><svg class="ic"><use href="#i-boost"/></svg>تقویت و نرمال‌سازی صدا</h3>
+            <div class="field">
+              <label>حالت</label>
+              <select id="amode">
+                <option value="off">خاموش</option>
+                <option value="gain" selected>تقویت ساده (Volume)</option>
+                <option value="dynaudnorm">نرمال‌سازی پویا — صدای یکدست</option>
+                <option value="loudnorm">نرمال‌سازی استاندارد (EBU R128)</option>
+              </select>
+            </div>
+            <div class="field">
+              <label>میزان تقویت</label>
+              <div class="range-row">
+                <input id="gain" type="range" min="0.5" max="6" step="0.1" value="2">
+                <span class="val" id="gainVal">۲.۰×</span>
+              </div>
+            </div>
+            <div class="hint">برای صدای کم ۲× تا ۴× مناسب است؛ اگر صدا خش افتاد مقدار را کم کن یا «نرمال‌سازی پویا» را انتخاب کن. تغییر هنگام پخش بی‌درنگ اعمال می‌شود.</div>
+          </div>
+          <div class="card" style="margin-top:14px">
+            <h3><svg class="ic"><use href="#i-cc"/></svg>زیرنویس</h3>
+            <div class="field">
+              <label>لینک زیرنویس (VTT / SRT) — با Enter تأیید</label>
+              <input id="subUrl" class="ltr" type="text" placeholder="https://example.com/sub.vtt">
+            </div>
+            <div class="hint">زیرنویس روی ویدیوی در حال پخش اضافه می‌شود.</div>
+          </div>
+        </section>
+
+        <section class="tabpanel" data-tab="settings">
+          <div class="card">
+            <h3><svg class="ic"><use href="#i-server"/></svg>سرور محلی</h3>
+            <div class="field">
+              <label>آدرس سرور</label>
+              <input id="server" class="ltr" type="text" value="http://127.0.0.1:8787">
+            </div>
+            <div class="field">
+              <label>Referer (اختیاری — برای لینک‌های محافظت‌شده)</label>
+              <input id="referer" class="ltr" type="text" placeholder="http://example.com/">
+            </div>
+            <div class="hint">سرور محلی فایل‌های MKV و صدای AC3 را تبدیل و تقویت می‌کند. اجرا با آیکون دسکتاپ یا <code>./start.sh</code>.</div>
+          </div>
+          <div class="card" style="margin-top:14px">
+            <h3><svg class="ic"><use href="#i-clock"/></svg>پخش و پرش</h3>
+            <div class="field">
+              <label>پرش خودکار (ثانیه)</label>
+              <input id="jump" class="ltr" type="number" value="10" min="1" max="120">
+            </div>
+            <div class="note"><svg class="ic"><use href="#i-info"/></svg><span>فایل‌های پخش‌شده در پس‌زمینه ذخیره می‌شوند تا پرش سریع شود؛ وضعیت در نشانگر «کش» بالای صفحه دیده می‌شود.</span></div>
+          </div>
+        </section>
+
+        <section class="tabpanel" data-tab="help">
+          <div class="card">
+            <h3><svg class="ic"><use href="#i-help"/></svg>میان‌بُرهای صفحه‌کلید</h3>
+            <div class="kbd-grid">
+              <div><kbd>Space</kbd> پخش / توقف</div>
+              <div><kbd>←</kbd><kbd>→</kbd> پرش زمانی</div>
+              <div><kbd>↑</kbd><kbd>↓</kbd> صدا</div>
+              <div><kbd>M</kbd> بی‌صدا</div>
+              <div><kbd>F</kbd> تمام‌صفحه</div>
+              <div><kbd>L</kbd> تکرار</div>
+              <div><kbd>,</kbd><kbd>.</kbd> سرعت</div>
+              <div><kbd>?</kbd> راهنما</div>
+            </div>
+          </div>
+          <div class="card" style="margin-top:14px">
+            <h3><svg class="ic"><use href="#i-info"/></svg>نکات مهم</h3>
+            <div class="hint">
+              <b>چرا MKV پخش نمی‌شود؟</b> مرورگرها کانتینر MKV و صدای AC3/E-AC3 (رایج در دوبلهٔ فارسی) را پشتیبانی نمی‌کنند؛ سرور محلی با ffmpeg هنگام پخش آن‌ها را به MP4/AAC تبدیل می‌کند.<br><br>
+              <b>VPN و لینک‌های داخلی:</b> بسیاری از سرورهای ایرانی فقط با IP ایران باز می‌شوند؛ اگر «منبع در دسترس نیست» دیدی VPN را خاموش کن.
+            </div>
+          </div>
+        </section>
+      </div>
+    </aside>
+  </div>
+
+  <footer class="foot">
+    <div class="brandmini"><img src="icon.png" alt=""> <span>HordePlayer v1.0</span></div>
+    <span>ساخته‌شده برای پخش روان MKV و دوبلهٔ فارسی</span>
+  </footer>
+</div>
+
+<div class="toaster" id="toaster"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const video = $('video'), stage = $('stage'), empty = $('empty'), player = $('player');
+const playedEl = $('played'), bufEl = $('buf'), track = $('track'), seekTip = $('seekTip');
+
+let hls = null, dash = null, objectUrl = null;
+let playlist = [], listIndex = -1, loop = false, triedFallback = false, cacheTimer = null, scrubbing = false;
+
+/* ---------- Transcode (local server) state ---------- */
+const TS = { active:false, url:'', duration:0, offset:0, vcodec:'' };
+
+const fa = n => (n).toLocaleString('fa-IR');
+const fa1 = n => n.toLocaleString('fa-IR', {minimumFractionDigits:1, maximumFractionDigits:1});
+const fmt = s => { s=Math.max(0,Math.floor(isFinite(s)?s:0)); const h=s/3600|0,m=(s%3600)/60|0,x=s%60;
+  return (h?String(h).padStart(2,'0')+':':'')+String(m).padStart(2,'0')+':'+String(x).padStart(2,'0'); };
+
+function toast(msg, kind){
+  const t=document.createElement('div');
+  t.className='toast'+(kind==='err'?' err':kind==='ok'?' ok':'');
+  t.textContent=msg; $('toaster').appendChild(t);
+  requestAnimationFrame(()=>t.classList.add('show'));
+  setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),320); }, 2800);
+}
+function setIcon(el,name){ const u=el&&el.querySelector('use'); if(u) u.setAttribute('href','#i-'+name); }
+function spinner(on){ $('spinner').classList.toggle('on', on); }
+function setNP(txt){ $('np').textContent = txt||''; $('np').style.display = txt?'block':'none'; }
+
+function setEngine(txt, kind){
+  const e=$('engine');
+  e.className='pill'+(kind==='on'?' on':kind==='bad'?' bad':kind==='warn'?' warn':'');
+  e.innerHTML='<span class="dot"></span>'+txt;
+}
+function setServerBadge(txt, kind){
+  const b=$('srvBadge');
+  b.className='pill'+(kind?' '+kind:'');
+  b.innerHTML='<span class="dot"></span>'+txt;
+}
+
+const serverBase = () => ($('server').value||'http://127.0.0.1:8787').trim().replace(/\/+$/,'');
+const refererVal = () => ($('referer').value||'').trim();
+const amodeVal  = () => $('amode').value;
+const gainVal   = () => parseFloat($('gain').value)||1;
+const nameOf = src => { try{ const u=new URL(src, location.href); return decodeURIComponent((u.pathname.split('/').pop()||'')||src); }catch(e){ return src; } };
+
+function destroyEngines(){ if(hls){hls.destroy();hls=null;} if(dash){dash.reset();dash=null;} }
+function resetUrlObject(){ if(objectUrl){ URL.revokeObjectURL(objectUrl); objectUrl=null; } }
+function showEmpty(on){ empty.style.display = on?'flex':'none'; stage.classList.toggle('emptyStage', !!on); }
+
+/* ---------- media session ---------- */
+function mediaSession(name){
+  if(!('mediaSession' in navigator)) return;
+  try{
+    navigator.mediaSession.metadata = new MediaMetadata({title:name||'HordePlayer', artist:'HordePlayer', album:'پخش محلی'});
+    const set=(a,h)=>{ try{navigator.mediaSession.setActionHandler(a,h);}catch(e){} };
+    set('play', ()=>video.play()); set('pause', ()=>video.pause());
+    set('seekbackward', ()=>seekTo(absTime()-(+$('jump').value||10)));
+    set('seekforward',  ()=>seekTo(absTime()+(+$('jump').value||10)));
+  }catch(e){}
+}
+
+/* ---------- background cache ---------- */
+function stopCachePoll(){ if(cacheTimer){clearInterval(cacheTimer);cacheTimer=null;} }
+function clearCacheBadge(){ stopCachePoll(); const b=$('cacheBadge'); b.style.display='none'; }
+function setCacheBadge(txt, kind){
+  const b=$('cacheBadge'); b.style.display=''; b.className='pill'+(kind?' '+kind:'');
+  b.innerHTML='<span class="dot"></span>'+txt;
+}
+function pollCache(url){
+  stopCachePoll();
+  const tick = async ()=>{
+    try{
+      const j = await (await fetch(serverBase()+'/status?url='+encodeURIComponent(url))).json();
+      if(j.state==='ready'){ setCacheBadge('کش: کامل','on'); stopCachePoll(); toast('فایل کامل ذخیره شد؛ پرش حالا سریع است','ok'); }
+      else if(j.state==='downloading'){ const p=j.total?Math.round(j.downloaded/j.total*100):0; setCacheBadge('در حال ذخیره '+fa(p)+'٪'); }
+      else if(j.state==='error'){ setCacheBadge('کش: خطا','bad'); stopCachePoll(); toast('ذخیره‌سازی ناموفق بود — VPN خاموش است؟ دوباره «تبدیل» را بزن.','err'); }
+      else { clearCacheBadge(); }
+    }catch(e){ stopCachePoll(); }
+  };
+  tick(); cacheTimer=setInterval(tick, 2500);
+}
+
+/* ---------- direct playback ---------- */
+async function loadDirect(src){
+  TS.active=false; clearCacheBadge();
+  destroyEngines(); resetUrlObject();
+  showEmpty(false);
+  video.removeAttribute('src'); video.load();
+  setNP(nameOf(src)); mediaSession(nameOf(src));
+
+  if(/\.m3u8(\?|#|$)/i.test(src)){
+    if(window.Hls && Hls.isSupported()){
+      hls=new Hls({lowLatencyMode:true, backBufferLength:90});
+      hls.loadSource(src); hls.attachMedia(video);
+      hls.on(Hls.Events.MANIFEST_PARSED, ()=>video.play().catch(()=>{}));
+      hls.on(Hls.Events.ERROR,(e,d)=>{ if(d.fatal) toast('خطای HLS: '+d.details,'err'); });
+      setEngine('HLS','on'); return;
+    }
+    if(video.canPlayType('application/vnd.apple.mpegurl')){ video.src=src; setEngine('HLS','on'); video.play().catch(()=>{}); return; }
+    toast('مرورگر از HLS پشتیبانی نمی‌کند — با تبدیل امتحان کن','err'); return;
+  }
+  if(/\.mpd(\?|#|$)/i.test(src) && window.shaka){
+    dash=new shaka.Player(video);
+    try{ await dash.load(src); await video.play(); setEngine('DASH','on'); }
+    catch(e){ toast('خطای DASH: '+e.message,'err'); }
+    return;
+  }
+  video.src=src; setEngine('پخش مستقیم','on'); video.play().catch(()=>{});
+}
+
+/* ---------- transcode playback ---------- */
+async function enterTranscode(src){
+  TS.active=true; TS.url=src; TS.vcodec=''; TS.offset=0;
+  clearCacheBadge();
+  destroyEngines(); resetUrlObject();
+  showEmpty(false); spinner(true); setEngine('آماده‌سازی…','warn');
+  setNP(nameOf(src)); mediaSession(nameOf(src));
+  let r;
+  try{ r = await fetch(serverBase()+'/probe?url='+encodeURIComponent(src)+'&referer='+encodeURIComponent(refererVal())); }
+  catch(e){ spinner(false); setEngine('سرور در دسترس نیست','bad');
+    toast('سرور محلی اجرا نیست. آیکون HordePlayer روی دسکتاپ را بزن یا start.sh را اجرا کن.','err'); return; }
+  let info={}; try{ info=await r.json(); }catch(e){}
+  if(!r.ok || info.error || !info.vcodec){
+    spinner(false); setEngine('منبع در دسترس نیست','bad');
+    toast('نتوانستم منبع را باز کنم؛ اگر VPN روشن است خاموشش کن — این سرورها فقط با IP ایران باز می‌شوند.','err'); return;
+  }
+  TS.duration=+info.duration||0; TS.vcodec=info.vcodec||'';
+  $('dur').textContent=fmt(TS.duration);
+  toast('آماده شد؛ پخش با تبدیل…','ok');
+  startStream(0);
+  pollCache(src);
+}
+function startStream(offset){
+  TS.offset=Math.max(0, offset||0);
+  spinner(true); setEngine('تبدیل'+(TS.vcodec?' · '+TS.vcodec:''),'on');
+  const p=new URLSearchParams({ url:TS.url, start:String(TS.offset), vcodec:TS.vcodec,
+    amode:amodeVal(), gain:String(gainVal()), referer:refererVal() });
+  video.removeAttribute('src'); video.load();
+  video.src=serverBase()+'/play?'+p.toString();
+  video.play().catch(()=>{});
+}
+
+/* ---------- timeline helpers ---------- */
+function absTime(){ return TS.active ? TS.offset+(video.currentTime||0) : (video.currentTime||0); }
+function totalDuration(){ return TS.active ? TS.duration : (video.duration||0); }
+function absBufferedEnd(){ try{ if(video.buffered.length) return TS.offset+video.buffered.end(video.buffered.length-1); }catch(e){} return absTime(); }
+function seekTo(target){
+  target=Math.max(0, target);
+  if(TS.active){
+    if(target>=TS.offset && target<=absBufferedEnd()-0.5){ video.currentTime=target-TS.offset; }
+    else startStream(target);
+  } else if(video.duration){ video.currentTime=target; }
+}
+
+/* ---------- open ---------- */
+const NON_NATIVE=/\.(mkv|avi|ts|m2ts|mts|flv|wmv|mov|mpg|mpeg|vob|rm|rmvb|ogv|3gp|asf|f4v|divx)$/i;
+const isNative=u=>/\.(mp4|m4v|webm|ogg|ogv|mp3|m4a|aac|wav|flac|opus)(\?|#|$)/i.test(u);
+const isHls=u=>/\.m3u8(\?|#|$)/i.test(u);
+const isMpd=u=>/\.mpd(\?|#|$)/i.test(u);
+const needsTranscode=u=>NON_NATIVE.test(u.split(/[?#]/)[0]);
+
+function openUrl(src, force){
+  src=(src||'').trim(); if(!src){ toast('لینکی وارد نشده','err'); return; }
+  $('url').value=src; triedFallback=false;
+  if(isHls(src)||(isMpd(src)&&window.shaka)||(isNative(src)&&!force)) loadDirect(src);
+  else if(needsTranscode(src)||force) enterTranscode(src);
+  else loadDirect(src);
+}
+function loadLocalFile(file){
+  clearCacheBadge(); destroyEngines(); resetUrlObject(); showEmpty(false);
+  setNP(file.name+'  ·  فایل محلی'); mediaSession(file.name);
+  if(/\.(mkv|avi|ts|flv|wmv|mov|mpg|mpeg|vob)$/i.test(file.name)){
+    objectUrl=URL.createObjectURL(file);
+    TS.active=true; TS.url=objectUrl; TS.vcodec=''; TS.offset=0; TS.duration=0;
+    setEngine('فایل محلی (تبدیل)','warn');
+    const p=new URLSearchParams({url:objectUrl, start:'0', amode:amodeVal(), gain:String(gainVal())});
+    video.src=serverBase()+'/play?'+p.toString(); spinner(true); video.play().catch(()=>{});
+    fetch(serverBase()+'/probe?url='+encodeURIComponent(objectUrl)).then(r=>r.json())
+      .then(i=>{ TS.duration=+i.duration||0; TS.vcodec=i.vcodec||''; $('dur').textContent=fmt(TS.duration); }).catch(()=>{});
+  } else {
+    TS.active=false; objectUrl=URL.createObjectURL(file);
+    video.src=objectUrl; setEngine('فایل محلی','on'); video.play().catch(()=>{});
+  }
+}
+
+/* ---------- tabs ---------- */
+function openTab(name){
+  document.querySelectorAll('.seg button').forEach(b=> b.classList.toggle('active', b.dataset.tab===name));
+  document.querySelectorAll('.tabpanel').forEach(p=> p.classList.toggle('active', p.dataset.tab===name));
+}
+document.querySelectorAll('.seg button').forEach(btn=> btn.onclick=()=>openTab(btn.dataset.tab));
+
+/* ---------- wiring ---------- */
+$('playBtn').onclick=()=>openUrl($('url').value,false);
+$('transcodeBtn').onclick=()=>openUrl($('url').value,true);
+$('ccBtn').onclick=()=>{ openTab('audio'); setTimeout(()=>$('subUrl').focus(),60); };
+$('url').addEventListener('keydown', e=>{ if(e.key==='Enter') openUrl($('url').value,false); });
+
+$('file').addEventListener('change', e=>{
+  const files=[...e.target.files]; if(!files.length) return;
+  if(files.length>1){ playlist=files.map(f=>({name:f.name,file:f})); listIndex=0; renderList(); loadLocalFile(files[0]); }
+  else loadLocalFile(files[0]);
+});
+
+['dragenter','dragover'].forEach(ev=>stage.addEventListener(ev,e=>{ e.preventDefault(); stage.classList.add('dragover'); }));
+['dragleave','drop'].forEach(ev=>stage.addEventListener(ev,e=>{ e.preventDefault(); stage.classList.remove('dragover'); }));
+stage.addEventListener('drop', e=>{
+  const dt=e.dataTransfer;
+  const url=dt.getData('text/uri-list')||dt.getData('text/plain');
+  if(dt.files&&dt.files.length){ loadLocalFile(dt.files[0]); return; }
+  if(url) openUrl(url.trim(),false);
+});
+
+/* stage interactions */
+stage.addEventListener('click', ()=>{ if(empty.style.display!=='none') return; video.paused?video.play():video.pause(); });
+stage.addEventListener('dblclick', ()=>{ document.fullscreenElement?document.exitFullscreen():stage.requestFullscreen(); });
+$('bigPlay').onclick=(e)=>{ e.stopPropagation(); video.play(); };
+$('pipBtn').onclick=async (e)=>{ e.stopPropagation(); try{ document.pictureInPictureElement?await document.exitPictureInPicture():await video.requestPictureInPicture(); }catch(err){ toast('PiP پشتیبانی نمی‌شود','err'); } };
+$('fsBtn').onclick=(e)=>{ e.stopPropagation(); document.fullscreenElement?document.exitFullscreen():stage.requestFullscreen(); };
+
+/* transport */
+$('play').onclick=()=> video.paused?video.play():video.pause();
+$('fwd').onclick=()=> seekTo(Math.min(totalDuration(), absTime()+(+$('jump').value||10)));
+$('back').onclick=()=> seekTo(Math.max(0, absTime()-(+$('jump').value||10)));
+$('mute').onclick=()=>{ video.muted=!video.muted; syncVolume(); };
+$('vol').oninput=e=>{ video.volume=+e.target.value; video.muted=+e.target.value===0; syncVolume(); saveSettings(); };
+$('speed').onchange=e=>{ video.playbackRate=+e.target.value; saveSettings(); };
+$('loop').onclick=()=>{ loop=!loop; video.loop=loop; $('loop').classList.toggle('active',loop); toast(loop?'تکرار روشن':'تکرار خاموش'); saveSettings(); };
+function syncVolume(){
+  $('vol').value=video.volume;
+  $('vol').style.setProperty('--p',(video.muted?0:video.volume*100)+'%');
+  setIcon($('mute'), (video.muted||video.volume===0)?'mute':'volume');
+}
+
+/* seek track */
+const seek=$('seek');
+seek.addEventListener('input', ()=>{
+  scrubbing=true; track.classList.add('scrub');
+  const r=+seek.value/1000; playedEl.style.width=(r*100)+'%';
+});
+seek.addEventListener('change', ()=>{ const d=totalDuration(); if(d) seekTo(+seek.value/1000*d); scrubbing=false; track.classList.remove('scrub'); });
+track.addEventListener('mousemove', e=>{
+  const d=totalDuration(); if(!d) return;
+  const rect=track.getBoundingClientRect();
+  const x=Math.min(1, Math.max(0,(e.clientX-rect.left)/rect.width));
+  seekTip.textContent=fmt(x*d); seekTip.style.left=(x*100)+'%';
+});
+
+/* audio amplify */
+$('gain').oninput=e=>{ $('gainVal').textContent=fa1(+e.target.value)+'×'; };
+['amode','gain'].forEach(id=> $(id).addEventListener('change',()=>{ saveSettings(); if(TS.active){ toast('اعمال تنظیم صدا…'); startStream(absTime()); } }));
+
+/* subtitle */
+$('subUrl').addEventListener('keydown', e=>{
+  if(e.key!=='Enter') return;
+  const u=e.target.value.trim(); if(!u) return;
+  [...video.querySelectorAll('track')].forEach(t=>t.remove());
+  const trackEl=document.createElement('track');
+  trackEl.kind='subtitles'; trackEl.label='زیرنویس'; trackEl.srclang='fa'; trackEl.src=u; trackEl.default=true;
+  video.appendChild(trackEl); video.textTracks[0].mode='showing';
+  toast('زیرنویس اضافه شد','ok');
+});
+
+/* playlist */
+$('loadList').onclick=()=>{
+  playlist=$('playlist').value.split('\n').map(s=>s.trim()).filter(Boolean).map(u=>({name:u,url:u}));
+  listIndex=playlist.length?0:-1; renderList();
+  if(listIndex>=0) openUrl(playlist[0].url,false); else toast('پلی‌لیست خالی است','err');
+};
+$('next').onclick=nextTrack;
+function nextTrack(){
+  if(!playlist.length){ toast('پلی‌لیست خالی است','err'); return; }
+  listIndex=(listIndex+1)%playlist.length;
+  const it=playlist[listIndex];
+  if(it.url) openUrl(it.url,false); else if(it.file) loadLocalFile(it.file);
+  renderList();
+}
+function renderList(){ $('listInfo').textContent=fa(playlist.length)+' آیتم'+(listIndex>=0?' · '+fa(listIndex+1):''); }
+
+/* video events */
+video.addEventListener('timeupdate', ()=>{
+  const d=totalDuration(), t=absTime();
+  if(!scrubbing){
+    $('cur').textContent=fmt(t);
+    if(d>0){ playedEl.style.width=Math.min(100,t/d*100)+'%'; seek.value=t/d*1000; }
+    bufEl.style.width=(d>0?Math.min(100,absBufferedEnd()/d*100):0)+'%';
+  }
+});
+video.addEventListener('loadedmetadata', ()=>{ spinner(false); if(!TS.active) $('dur').textContent=fmt(video.duration||0); });
+video.addEventListener('playing', ()=>{ spinner(false); player.classList.add('playing'); stage.classList.remove('paused');
+  if(TS.active) setEngine('تبدیل'+(TS.vcodec?' · '+TS.vcodec:''),'on'); if('mediaSession' in navigator) navigator.mediaSession.playbackState='playing'; });
+video.addEventListener('waiting', ()=>{ if(TS.active) spinner(true); });
+video.addEventListener('play', ()=>{ setIcon($('play'),'pause'); stage.classList.remove('paused'); });
+video.addEventListener('pause', ()=>{ setIcon($('play'),'play'); stage.classList.add('paused');
+  if('mediaSession' in navigator) navigator.mediaSession.playbackState='paused'; });
+video.addEventListener('error', ()=>{
+  spinner(false);
+  const src=video.currentSrc||video.src;
+  if(!TS.active && src && /^https?:/i.test(src) && !triedFallback){ triedFallback=true; toast('پخش مستقیم نشد؛ تلاش با تبدیل…','err'); enterTranscode(src); }
+  else if(!TS.active) toast('خطا در پخش این منبع — «تبدیل» را امتحان کن','err');
+});
+video.addEventListener('ended', ()=>{ if(!loop && playlist.length>1) nextTrack(); });
+
+/* fullscreen */
+function fsIcon(){ setIcon($('fsBtn'), document.fullscreenElement?'compress':'expand'); }
+document.addEventListener('fullscreenchange', fsIcon);
+
+/* overlay auto-hide */
+let hideT=null;
+function poke(){ stage.classList.add('show-ov'); clearTimeout(hideT);
+  hideT=setTimeout(()=>{ if(!video.paused) stage.classList.remove('show-ov'); }, 2600); }
+stage.addEventListener('mousemove', poke);
+stage.addEventListener('mouseleave', ()=>{ if(!video.paused) stage.classList.remove('show-ov'); });
+
+/* keyboard */
+document.addEventListener('keydown', e=>{
+  if(/input|textarea|select/i.test(e.target.tagName)) return;
+  const j=+$('jump').value||10;
+  switch(e.key.toLowerCase()){
+    case ' ': case 'k': e.preventDefault(); video.paused?video.play():video.pause(); break;
+    case 'arrowright': seekTo(absTime()+j); break;
+    case 'arrowleft': seekTo(absTime()-j); break;
+    case 'arrowup': video.volume=Math.min(1,video.volume+0.1); syncVolume(); break;
+    case 'arrowdown': video.volume=Math.max(0,video.volume-0.1); syncVolume(); break;
+    case 'm': $('mute').click(); break;
+    case 'f': document.fullscreenElement?document.exitFullscreen():stage.requestFullscreen(); break;
+    case 'l': $('loop').click(); break;
+    case '?': openTab('help'); break;
+    case '>': case '.': video.playbackRate=Math.min(16,video.playbackRate+0.25); $('speed').value=video.playbackRate; toast('سرعت '+fa1(video.playbackRate)+'×'); break;
+    case '<': case ',': video.playbackRate=Math.max(0.1,video.playbackRate-0.25); $('speed').value=video.playbackRate; toast('سرعت '+fa1(video.playbackRate)+'×'); break;
+  }
+});
+
+/* ---------- settings persistence ---------- */
+const SETTINGS_KEY='hordeplayer.v1';
+function saveSettings(){
+  try{ localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+    server:$('server').value, referer:$('referer').value, jump:$('jump').value,
+    amode:$('amode').value, gain:$('gain').value, speed:$('speed').value, vol:$('vol').value, loop
+  })); }catch(e){}
+}
+function loadSettings(){
+  let s={}; try{ s=JSON.parse(localStorage.getItem(SETTINGS_KEY)||'{}'); }catch(e){}
+  if(s.server) $('server').value=s.server;
+  if(s.referer!==undefined) $('referer').value=s.referer;
+  if(s.jump) $('jump').value=s.jump;
+  if(s.amode) $('amode').value=s.amode;
+  if(s.gain){ $('gain').value=s.gain; $('gainVal').textContent=fa1(+s.gain)+'×'; }
+  if(s.speed){ $('speed').value=s.speed; video.playbackRate=+s.speed; }
+  if(s.vol!==undefined){ video.volume=+s.vol; }
+  if(s.loop){ loop=true; video.loop=true; $('loop').classList.add('active'); }
+}
+['server','referer','jump'].forEach(id=> $(id).addEventListener('change', saveSettings));
+
+/* ---------- boot ---------- */
+loadSettings();
+syncVolume();
+$('gain').dispatchEvent(new Event('input'));
+stage.classList.add('paused');
+showEmpty(true);
+renderList();
+(async function health(){
+  try{
+    const j=await (await fetch(serverBase()+'/health')).json();
+    setServerBadge(j.ffmpeg?'سرور فعال':'سرور فعال (بدون ffmpeg)', j.ffmpeg?'on':'warn');
+  }catch(e){ setServerBadge('سرور اجرا نشده','bad'); }
+})();
+</script>
+</body>
+</html>

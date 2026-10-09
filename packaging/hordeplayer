@@ -1,0 +1,125 @@
+#!/usr/bin/env bash
+#
+# HordePlayer - launcher / controller.
+#   hordeplayer            start the server and open the player
+#   hordeplayer --stop     stop a running server
+#   hordeplayer --port N   use a custom port (default 8787)
+#   hordeplayer --help     show this help
+#
+set -uo pipefail
+
+HERE="$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")" && pwd)"
+
+find_app() {
+  if [ -n "${HORDE_APP_DIR:-}" ] && [ -f "$HORDE_APP_DIR/server.py" ]; then echo "$HORDE_APP_DIR"; return; fi
+  if [ -n "${APPDIR:-}" ] && [ -f "$APPDIR/usr/share/hordeplayer/server.py" ]; then echo "$APPDIR/usr/share/hordeplayer"; return; fi
+  for d in "$HERE/../app" "$HERE/../share/hordeplayer" "/usr/share/hordeplayer" "/usr/local/share/hordeplayer"; do
+    if [ -f "$d/server.py" ]; then echo "$d"; return; fi
+  done
+  echo ""
+}
+
+notify() {
+  command -v notify-send >/dev/null 2>&1 && notify-send -a HordePlayer -i hordeplayer "HordePlayer" "$1" 2>/dev/null || true
+}
+say() { printf '\033[36m[HordePlayer]\033[0m %s\n' "$1"; }
+warn() { printf '\033[33m[HordePlayer]\033[0m %s\n' "$1"; notify "$1"; }
+die()  { printf '\033[31m[HordePlayer]\033[0m %s\n' "$1" >&2; notify "$1"; exit 1; }
+
+APP_DIR="$(find_app)"
+[ -n "$APP_DIR" ] || die "application files not found."
+
+PORT="${HORDE_PORT:-8787}"
+ACTION="start"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --stop) ACTION="stop" ;;
+    --port) shift; PORT="${1:-8787}" ;;
+    --help|-h) sed -n '2,7p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    *) warn "unknown option: $1" ;;
+  esac
+  shift || true
+done
+
+CACHE="${XDG_CACHE_HOME:-$HOME/.cache}/hordeplayer"
+mkdir -p "$CACHE" 2>/dev/null || CACHE="/tmp/hordeplayer-$UID"
+mkdir -p "$CACHE" 2>/dev/null
+LOG="$CACHE/server.log"
+PIDFILE="$CACHE/server.pid"
+URL="http://127.0.0.1:${PORT}/"
+HEALTH="$URL/health"
+
+stop_server() {
+  local stopped=0
+  if [ -f "$PIDFILE" ]; then
+    local pid; pid="$(cat "$PIDFILE" 2>/dev/null || true)"
+    if [ -n "${pid:-}" ] && kill -0 "$pid" 2>/dev/null; then kill "$pid" 2>/dev/null && stopped=1; fi
+    rm -f "$PIDFILE"
+  fi
+  if command -v fuser >/dev/null 2>&1; then fuser -k "${PORT}/tcp" >/dev/null 2>&1 && stopped=1; fi
+  [ "$stopped" = "1" ] && say "server stopped (port $PORT)." || warn "no server was running on port $PORT."
+}
+
+[ "$ACTION" = "stop" ] && { stop_server; exit 0; }
+
+# --- AppImage: stage the payload into the user cache ---
+# The AppImage mount/ extraction dir disappears once this launcher exits, but
+# the server keeps running in the background. So copy the app + bundled ffmpeg
+# to a stable location on first run and serve from there.
+if [ -n "${APPDIR:-}" ] && [ -d "$APPDIR/usr/share/hordeplayer" ]; then
+  STAGE="$CACHE/app"
+  mkdir -p "$STAGE"
+  cp -rf "$APPDIR/usr/share/hordeplayer/." "$STAGE/" 2>/dev/null || true
+  APP_DIR="$STAGE"
+  BINDIR="$CACHE/bin"
+  mkdir -p "$BINDIR"
+  for _b in ffmpeg ffprobe; do
+    if [ -x "$APPDIR/usr/bin/$_b" ] && [ ! -x "$BINDIR/$_b" ]; then
+      cp -f "$APPDIR/usr/bin/$_b" "$BINDIR/$_b" 2>/dev/null || true
+    fi
+  done
+  [ -x "$BINDIR/ffmpeg" ]  && export FFMPEG_BIN="$BINDIR/ffmpeg"
+  [ -x "$BINDIR/ffprobe" ] && export FFPROBE_BIN="$BINDIR/ffprobe"
+fi
+
+open_url() {
+  if command -v xdg-open >/dev/null 2>&1; then (xdg-open "$1" >/dev/null 2>&1 &)
+  elif command -v gio >/dev/null 2>&1; then (gio open "$1" >/dev/null 2>&1 &)
+  else warn "open this address in your browser: $1"; fi
+}
+
+# --- already running? just open it ---
+if curl -s --max-time 2 "$HEALTH" >/dev/null 2>&1; then
+  say "server already running; opening the player."
+  open_url "$URL"; exit 0
+fi
+
+command -v python3 >/dev/null 2>&1 || die "python3 is required but was not found."
+
+# --- free a stale port ---
+if command -v fuser >/dev/null 2>&1; then fuser -k "${PORT}/tcp" >/dev/null 2>&1 || true; fi
+sleep 0.5
+
+# --- start ---
+say "starting server on port $PORT ..."
+cd "$APP_DIR" || die "cannot enter $APP_DIR"
+nohup python3 -u server.py "$PORT" >"$LOG" 2>&1 </dev/null &
+SRV_PID=$!
+echo "$SRV_PID" > "$PIDFILE"
+
+ok=0
+for _ in $(seq 1 40); do
+  if curl -s --max-time 1 "$HEALTH" >/dev/null 2>&1; then ok=1; break; fi
+  if ! kill -0 "$SRV_PID" 2>/dev/null; then break; fi
+  sleep 0.25
+done
+
+if [ "$ok" != "1" ]; then
+  warn "server failed to start. See log: $LOG"
+  [ -f "$LOG" ] && tail -n 20 "$LOG" >&2
+  exit 1
+fi
+
+say "running (PID $SRV_PID)  ·  $URL"
+say "stop with:  hordeplayer --stop"
+open_url "$URL"

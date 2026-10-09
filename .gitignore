@@ -1,0 +1,19 @@
+# build artifacts
+/build/
+/dist/
+*.deb
+*.rpm
+*.AppImage
+
+# python
+__pycache__/
+*.py[cod]
+
+# runtime
+.cache/
+.server.pid
+*.log
+
+# editor / os
+.DS_Store
+*.swp
