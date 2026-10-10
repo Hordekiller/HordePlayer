@@ -62,6 +62,15 @@ stop_server() {
 
 [ "$ACTION" = "stop" ] && { stop_server; exit 0; }
 
+# --- TCP health check using python3 (works inside snaps, where /dev/tcp is blocked) ---
+health() {
+  python3 -c "import socket,sys
+try:
+    s = socket.create_connection(('127.0.0.1', $PORT), 2); s.close()
+except Exception:
+    sys.exit(1)" >/dev/null 2>&1 || return 1
+}
+
 # --- AppImage: stage the payload into the user cache ---
 # The AppImage mount/ extraction dir disappears once this launcher exits, but
 # the server keeps running in the background. So copy the app + bundled ffmpeg
@@ -89,7 +98,7 @@ open_url() {
 }
 
 # --- already running? just open it ---
-if curl -s --max-time 2 "$HEALTH" >/dev/null 2>&1; then
+if health; then
   say "server already running; opening the player."
   open_url "$URL"; exit 0
 fi
@@ -109,7 +118,7 @@ echo "$SRV_PID" > "$PIDFILE"
 
 ok=0
 for _ in $(seq 1 40); do
-  if curl -s --max-time 1 "$HEALTH" >/dev/null 2>&1; then ok=1; break; fi
+  if health; then ok=1; break; fi
   if ! kill -0 "$SRV_PID" 2>/dev/null; then break; fi
   sleep 0.25
 done

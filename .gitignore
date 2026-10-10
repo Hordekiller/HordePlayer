@@ -4,6 +4,10 @@
 *.deb
 *.rpm
 *.AppImage
+*.snap
+parts/
+stage/
+prime/
 
 # python
 __pycache__/

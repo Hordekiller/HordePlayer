@@ -1,0 +1,67 @@
+name: hordoplayer
+base: core24
+version: '1.0.0'
+title: HordePlayer
+summary: Professional local video player powered by ffmpeg
+description: |
+  HordePlayer is a fast, privacy-focused local video player for Linux.
+  Plays MKV, MP4, WebM, MOV, TS and remuxes AC3/E-AC3 to MP4/AAC on-the-fly
+  via a local ffmpeg server. Features Persian/RTL UI, playlists, audio
+  enhancement, background caching and media session integration.
+license: GPL-3.0
+contact: https://github.com/Hordekiller/HordePlayer
+website: https://github.com/Hordekiller/HordePlayer
+source-code: https://github.com/Hordekiller/HordePlayer
+issues: https://github.com/Hordekiller/HordePlayer/issues
+
+grade: stable
+confinement: strict
+
+platforms:
+  amd64:
+    build-on: amd64
+    build-for: amd64
+
+apps:
+  hordoplayer:
+    command: usr/bin/hordeplayer
+    desktop: usr/share/applications/hordeplayer.desktop
+    plugs:
+      - network
+      - network-bind
+      - audio-playback
+      - pulseaudio
+      - desktop
+      - desktop-legacy
+      - wayland
+      - x11
+      - opengl
+      - home
+      - removable-media
+      - unity7
+      - browser-support
+
+parts:
+  hordoplayer:
+    plugin: dump
+    source: .
+    stage-packages:
+      - ffmpeg
+      - python3-minimal
+    override-build: |
+      set -eux
+      mkdir -p $CRAFT_PART_INSTALL/usr/share/hordeplayer
+      mkdir -p $CRAFT_PART_INSTALL/usr/bin
+      mkdir -p $CRAFT_PART_INSTALL/usr/share/applications
+      mkdir -p $CRAFT_PART_INSTALL/usr/share/icons/hicolor/{256x256,512x512,128x128}/apps
+      cp -r app/* $CRAFT_PART_INSTALL/usr/share/hordeplayer/
+      cp packaging/hordeplayer $CRAFT_PART_INSTALL/usr/bin/
+      chmod +x $CRAFT_PART_INSTALL/usr/bin/hordeplayer
+      cp packaging/hordeplayer.desktop $CRAFT_PART_INSTALL/usr/share/applications/
+      sed -i 's|Icon=hordeplayer|Icon=${SNAP}/usr/share/icons/hicolor/512x512/apps/hordeplayer.png|; s|Exec=hordeplayer|Exec=hordoplayer|' $CRAFT_PART_INSTALL/usr/share/applications/hordeplayer.desktop
+      install -D -m 644 assets/hordeplayer.png $CRAFT_PART_INSTALL/usr/share/icons/hicolor/512x512/apps/hordeplayer.png
+      install -D -m 644 assets/hordeplayer-256.png $CRAFT_PART_INSTALL/usr/share/icons/hicolor/256x256/apps/hordeplayer.png
+      install -D -m 644 assets/hordeplayer-128.png $CRAFT_PART_INSTALL/usr/share/icons/hicolor/128x128/apps/hordeplayer.png
+      chmod +x $CRAFT_PART_INSTALL/usr/bin/hordeplayer
+    organize:
+      usr/share/hordeplayer/server.py: usr/share/hordeplayer/server.py
