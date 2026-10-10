@@ -43,19 +43,15 @@ jobs:
           generate_release_notes: true
 
   snap:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install snapcraft + LXD
-        run: |
-          sudo snap install snapcraft --classic
-          sudo snap install lxd --channel=latest/stable
-          sudo lxd init --minimal
-          sudo usermod -aG lxd "$USER"
+      - name: Install snapcraft
+        run: sudo snap install snapcraft --classic
 
-      - name: Build snap
-        run: sg lxd -c "snapcraft pack"
+      - name: Build snap (host build, core24 == runner OS)
+        run: sudo snapcraft pack --destructive-mode
 
       - name: Upload snap artifact
         uses: actions/upload-artifact@v4
