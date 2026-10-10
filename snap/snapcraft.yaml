@@ -1,4 +1,4 @@
-name: hordoplayer
+name: hordeplayer
 base: core24
 version: '1.0.0'
 title: HordePlayer
@@ -23,7 +23,7 @@ platforms:
     build-for: amd64
 
 apps:
-  hordoplayer:
+  hordeplayer:
     command: usr/bin/hordeplayer
     desktop: usr/share/applications/hordeplayer.desktop
     plugs:
@@ -42,7 +42,7 @@ apps:
       - browser-support
 
 parts:
-  hordoplayer:
+  hordeplayer:
     plugin: dump
     source: .
     stage-packages:
@@ -55,10 +55,11 @@ parts:
       mkdir -p $CRAFT_PART_INSTALL/usr/share/applications
       mkdir -p $CRAFT_PART_INSTALL/usr/share/icons/hicolor/{256x256,512x512,128x128}/apps
       cp -r app/* $CRAFT_PART_INSTALL/usr/share/hordeplayer/
+      cp LICENSE $CRAFT_PART_INSTALL/usr/share/hordeplayer/
       cp packaging/hordeplayer $CRAFT_PART_INSTALL/usr/bin/
       chmod +x $CRAFT_PART_INSTALL/usr/bin/hordeplayer
       cp packaging/hordeplayer.desktop $CRAFT_PART_INSTALL/usr/share/applications/
-      sed -i 's|Icon=hordeplayer|Icon=${SNAP}/usr/share/icons/hicolor/512x512/apps/hordeplayer.png|; s|Exec=hordeplayer|Exec=hordoplayer|' $CRAFT_PART_INSTALL/usr/share/applications/hordeplayer.desktop
+      sed -i 's|Icon=hordeplayer|Icon=${SNAP}/usr/share/icons/hicolor/512x512/apps/hordeplayer.png|' $CRAFT_PART_INSTALL/usr/share/applications/hordeplayer.desktop
       install -D -m 644 assets/hordeplayer.png $CRAFT_PART_INSTALL/usr/share/icons/hicolor/512x512/apps/hordeplayer.png
       install -D -m 644 assets/hordeplayer-256.png $CRAFT_PART_INSTALL/usr/share/icons/hicolor/256x256/apps/hordeplayer.png
       install -D -m 644 assets/hordeplayer-128.png $CRAFT_PART_INSTALL/usr/share/icons/hicolor/128x128/apps/hordeplayer.png

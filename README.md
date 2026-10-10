@@ -24,7 +24,7 @@ Plays any link or local file in a clean web UI — including **MKV** and
 - **Professional UI** — tabs, SVG icons, playlist, playback speed, loop, subtitles, PiP, fullscreen, drag & drop, and rich keyboard shortcuts.
 - **RTL / Persian-first** interface.
 - **Private by design** — everything runs locally on `127.0.0.1`; nothing leaves your machine (except fetching the video itself).
-- **Portable** — ships as AppImage, `.deb`, `.rpm`, or a single `install.sh`.
+- **Portable** — ships as AppImage, `.deb`, `.rpm`, snap, or a single `install.sh`.
 
 ## 📋 Requirements
 
@@ -52,6 +52,12 @@ hordeplayer
 sudo dnf install ./hordeplayer-*.noarch.rpm
 hordeplayer
 ```
+
+### Snap Store (all major distros)
+```bash
+sudo snap install hordeplayer
+```
+Available on the Snap Store: https://snapcraft.io/hordeplayer (ffmpeg is bundled).
 
 ### From source (per-user, no root)
 ```bash
@@ -86,6 +92,7 @@ hordeplayer --stop         # stop the running server
 bash packaging/build-all.sh      # builds .deb, .rpm and AppImage into ./dist
 ```
 Individual builders: `packaging/build-deb.sh`, `build-rpm.sh`, `build-appimage.sh`.
+The snap is built with `snapcraft pack` from `snap/snapcraft.yaml`.
 
 - `BUNDLE_FFMPEG=0` — don't embed ffmpeg in the AppImage (use the system one).
 - `ARCH=arm64` — build the AppImage for another architecture.
